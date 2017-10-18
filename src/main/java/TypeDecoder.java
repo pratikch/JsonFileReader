@@ -1,5 +1,4 @@
 
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -31,15 +30,15 @@ public class TypeDecoder {
 		this.parse();
 	}
 
-	public  Map<String, TypeInfo> getColumnNameDatatypeMap() {
+	public Map<String, TypeInfo> getColumnNameDatatypeMap() {
 		return columnNameDatatypeMap;
 	}
 
-	public  Map<String, String> getFieldColumnNameMap() {
+	public Map<String, String> getFieldColumnNameMap() {
 		return fieldColumnNameMap;
 	}
 
-	public  Map<String, Schema.Type> getFieldJsonTypeMap() {
+	public Map<String, Schema.Type> getFieldJsonTypeMap() {
 		return fieldJsonTypeMap;
 	}
 
@@ -76,7 +75,7 @@ public class TypeDecoder {
 		} else {
 			fieldColumnMap = fieldColumnNameMap;
 		}
-		
+
 		if (columnNameDatatypeMap == null) {
 			columnNameTypeMap = new LinkedHashMap<String, TypeInfo>();
 			TypeInfo.SQLTypeCode typeCode = TypeInfo.SQLTypeCode.UNDEFINED_SQL_TYPE;
@@ -111,22 +110,29 @@ public class TypeDecoder {
 					throw new UDRException(38002, "Not supported dataType");
 				case DOUBLE:
 					typeCode = TypeInfo.SQLTypeCode.DOUBLE_PRECISION;
+					length = 10;
+					precision = 2;
 					tempTypeInfo = new TypeInfo(typeCode, length, nullable, scale, charset, intervalCode, precision);
 					break;
 				case FLOAT:
 					typeCode = TypeInfo.SQLTypeCode.DOUBLE_PRECISION;
+					length = 10;
+					precision = 2;
 					tempTypeInfo = new TypeInfo(typeCode, length, nullable, scale, charset, intervalCode, precision);
 					break;
 				case INT:
 					typeCode = TypeInfo.SQLTypeCode.INT;
+					length = 10;
 					tempTypeInfo = new TypeInfo(typeCode, length, nullable, scale, charset, intervalCode, precision);
 					break;
 				case LONG:
 					typeCode = TypeInfo.SQLTypeCode.LARGEINT;
+					length = 10;
 					tempTypeInfo = new TypeInfo(typeCode, length, nullable, scale, charset, intervalCode, precision);
 					break;
 				case STRING:
 					typeCode = TypeInfo.SQLTypeCode.VARCHAR;
+					length = 1024;
 					tempTypeInfo = new TypeInfo(typeCode, length, nullable, scale, charset, intervalCode, precision);
 					break;
 				default:

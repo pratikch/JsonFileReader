@@ -1,11 +1,10 @@
+
 /**
  * 
  */
 
-
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 
@@ -13,6 +12,7 @@ import org.apache.avro.Schema;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.trafodion.sql.udr.ColumnInfo;
@@ -46,8 +46,8 @@ public class JsonFileReader extends UDR {
 		Properties props = new Properties();
 		props.put("bootstrap.servers", input.getConnectionString());
 		props.put("group.id", "EsgynUDF_Group_" + input.getGroupId());
-		props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-		props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+		props.put("key.deserializer", StringDeserializer.class);
+		props.put("value.deserializer", StringDeserializer.class.getName());
 		return props;
 
 	}
@@ -58,6 +58,7 @@ public class JsonFileReader extends UDR {
 
 		KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(getConnectionProperties(input));
 		try {
+			consumer.subscribe(Arrays.asList(input.getTopicString()));
 			ObjectMapper mapper = new ObjectMapper();
 			ConsumerRecords<String, String> records = null;
 			JsonNode rootNode = null;
@@ -142,77 +143,94 @@ public class JsonFileReader extends UDR {
 		// 5. schema
 		// 6. table column mapping file
 		// 7. input textfile
-		if (args == null || args.length < 7) {
-			System.out.println("Required params less than 7 ");
+		if (args == null || args.length < 6) {
+			System.out.println("Required params less than 6 ");
 			System.out.println("Usage 1. ConnectionString, 2. GroupId, 3. Topic, ");
 			System.out.println("4. Number of Rows to read, 5. Schema, 6. Table Column Mapping File,");
-			System.out.println("7. test input file");
+			// System.out.println("7. test input file");
 			System.exit(0);
 		}
 
 		InputParameters input = new InputParameters(args[0], Integer.parseInt(args[1]), args[2], args[3], args[4],
 				Integer.parseInt(args[5]));
-		TypeDecoder decoder = new TypeDecoder(input.getSchemaLocation(), input.getFieldColumnMappingLocation());
-		Map<String, TypeInfo> columnMap = decoder.getColumnNameDatatypeMap();
+		TypeDecoder decoder1 = new TypeDecoder(input.getSchemaLocation(), input.getFieldColumnMappingLocation());
+		Map<String, TypeInfo> columnMap = decoder1.getColumnNameDatatypeMap();
 
 		for (Map.Entry<String, TypeInfo> column : columnMap.entrySet()) {
 			System.out.println(column.getKey() + "\t" + column.getValue().getSQLType());
 		}
 
-		try (BufferedReader br = new BufferedReader(new FileReader(args[6]))) {
+		JsonFileReader reader = new JsonFileReader();
 
-			String sCurrentLine;
+		KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(
+				reader.getConnectionProperties(input));
+		try {
+			consumer.subscribe(Arrays.asList(input.getTopicString()));
+
 			ObjectMapper mapper = new ObjectMapper();
+			ConsumerRecords<String, String> records = null;
 			JsonNode rootNode = null;
+			TypeDecoder decoder = new TypeDecoder(input.getSchemaLocation(), input.getFieldColumnMappingLocation());
 			Map<String, String> fieldNameColumnMap = decoder.getFieldColumnNameMap();
 			Map<String, Schema.Type> fieldJsonTypeMap = decoder.getFieldJsonTypeMap();
 			String fieldName = null;
 			StringBuilder sb = new StringBuilder(512);
 			JsonNode tempNode = null;
-			while ((sCurrentLine = br.readLine()) != null) {
+			while (true) {
+				records = consumer.poll(100);
 
-				System.out.println(sCurrentLine);
-				rootNode = mapper.readTree(sCurrentLine);
-				sb = new StringBuilder(512);
-				for (Map.Entry<String, String> fieldColumnEntry : fieldNameColumnMap.entrySet()) {
-					fieldName = fieldColumnEntry.getKey();
-					tempNode = rootNode.get(fieldName);
-					if (tempNode != null) {
-						switch (fieldJsonTypeMap.get(fieldName)) {
-						case ARRAY:
-						case BOOLEAN:
-						case BYTES:
-						case ENUM:
-						case FIXED:
-						case MAP:
-						case NULL:
-						case RECORD:
-						case UNION:
-							throw new Exception("Not supported type");
-						case DOUBLE:
-						case FLOAT:
-							sb.append(tempNode.getDoubleValue()).append("|");
-							break;
-						case INT:
-							sb.append(tempNode.getIntValue()).append("|");
-							break;
-						case LONG:
-							sb.append(tempNode.getLongValue()).append("|");
-							break;
-						case STRING:
-							sb.append(tempNode.getTextValue()).append("|");
-							break;
-						default:
-							throw new Exception("Not supported type");
+				for (ConsumerRecord<String, String> record : records) {
+					System.out.println(record.value());
+					rootNode = mapper.readTree(record.value());
+					sb = new StringBuilder(512);
+					for (Map.Entry<String, String> fieldColumnEntry : fieldNameColumnMap.entrySet()) {
+						fieldName = fieldColumnEntry.getKey();
+						tempNode = rootNode.get(fieldName);
+
+						if (tempNode != null) {
+							switch (fieldJsonTypeMap.get(fieldName)) {
+							case ARRAY:
+							case BOOLEAN:
+							case BYTES:
+							case ENUM:
+							case FIXED:
+							case MAP:
+							case NULL:
+							case RECORD:
+							case UNION:
+								throw new Exception("Not supported type");
+							case DOUBLE:
+							case FLOAT:
+								sb.append(tempNode.getDoubleValue()).append("|");
+								break;
+							case INT:
+								sb.append(tempNode.getIntValue()).append("|");
+								break;
+							case LONG:
+								sb.append(tempNode.getLongValue()).append("|");
+								break;
+							case STRING:
+								sb.append(tempNode.getTextValue()).append("|");
+								break;
+							default:
+								throw new Exception("Not supported type");
+							}
+						} else {
+							sb.append("|");
 						}
-					} else {
-						sb.append("|");
 					}
+					System.out.println(sb.toString());
 				}
-				System.out.println(sb.toString());
+				consumer.commitAsync();
 			}
 		} catch (Exception e) {
-			// log.error("Unexpected error", e);
+			e.printStackTrace();
+		} finally {
+			try {
+				consumer.commitSync();
+			} finally {
+				consumer.close();
+			}
 		}
 
 	}

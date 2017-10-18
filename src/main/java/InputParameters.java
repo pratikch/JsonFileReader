@@ -1,5 +1,4 @@
 
-
 import org.trafodion.sql.udr.TypeInfo;
 import org.trafodion.sql.udr.UDRException;
 import org.trafodion.sql.udr.UDRInvocationInfo;
@@ -125,10 +124,6 @@ public class InputParameters {
 			} else {
 				throw new UDRException(38080, "Parameter number %d must be a literal.", i);
 			}
-			if (info.getCallPhase() == UDRInvocationInfo.CallPhase.COMPILER_INITIAL_CALL)
-				// we need to make the formal parameter list match
-				// the actual parameters
-				info.addFormalParameter(info.par().getColumn(i));
 		}
 
 		return new InputParameters(connectionString, groupId, topic, schemaLocation, fieldColumnMapLocation,
